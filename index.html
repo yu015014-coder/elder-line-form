@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新增提醒</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  :root { --g: #2F5F8F; --gd: #1E4266; --gl: #E7EEF6; --line: #D5DCE4; }
+  body { margin: 0; font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         font-size: 20px; color: #222; background: #F2F4F7; padding-bottom: 110px; }
+  header { background: var(--g); color: #fff; padding: 22px 18px 26px; }
+  header h1 { margin: 0; font-size: 30px; }
+  header p { margin: 6px 0 0; font-size: 18px; opacity: .9; }
+  main { padding: 0 14px; margin-top: -12px; }
+  .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .q { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-weight: bold; font-size: 22px; margin-bottom: 12px; }
+  .num { flex: 0 0 32px; height: 32px; border-radius: 50%; background: var(--g); color: #fff; font-size: 18px;
+         display: flex; align-items: center; justify-content: center; }
+  .opt { color: #888; font-weight: normal; font-size: 17px; }
+  textarea, input[type=date], input[type=time] {
+    width: 100%; font-size: 22px; padding: 14px; border: 2px solid var(--line); border-radius: 12px; background: #fff;
+    font-family: inherit; color: #222; display: block; min-width: 0; max-width: 100%; }
+  /* iPhone 的日期、時間欄位預設會撐超過畫面，這裡把它壓回來 */
+  input[type=date], input[type=time] { -webkit-appearance: none; appearance: none; height: 60px; line-height: 28px; text-align: left; }
+  input::-webkit-date-and-time-value { text-align: left; }
+  textarea:focus, input:focus { outline: none; border-color: var(--g); }
+  textarea { min-height: 100px; resize: vertical; }
+  .hint { color: #777; font-size: 16px; margin-top: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .chip { border: 2px solid var(--line); background: #fff; border-radius: 999px; padding: 10px 14px; font-size: 19px;
+          font-family: inherit; color: #222; }
+  .chip:active { background: var(--gl); }
+  .pills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .pills.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pills.wd { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+  .pills label { text-align: center; padding: 15px 4px; border: 2px solid var(--line); border-radius: 12px;
+                 background: #fff; font-size: 20px; user-select: none; min-width: 0; overflow-wrap: anywhere; }
+  .pills.wd label { padding: 14px 0; }
+  .pills input { display: none; }
+  .pills label.on { border-color: var(--g); background: var(--gl); color: var(--gd); font-weight: bold; }
+  .sub { margin-top: 14px; }
+  .sub .q { font-size: 20px; margin-bottom: 10px; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+         background: rgba(242,244,247,.96); border-top: 1px solid var(--line); }
+  button.go { width: 100%; font-size: 24px; font-weight: bold; padding: 18px; border: 0; border-radius: 16px;
+              background: var(--g); color: #fff; font-family: inherit; }
+  button.go:disabled { background: #9DB3CB; }
+  button.go.ghost { background: #fff; color: var(--gd); border: 2px solid var(--g); margin-top: 14px; }
+  .closeHint { background: #FFF8E1; color: #6D5200; border-radius: 12px; padding: 12px; font-size: 19px; margin: 12px 0 0; }
+  .summary { font-size: 17px; color: #555; margin: 0 0 8px; text-align: center; min-height: 1.2em; }
+  .err { color: #C62828; font-weight: bold; margin: 0 0 8px; text-align: center; display: none; }
+  .done { text-align: center; padding: 50px 20px; display: none; }
+  .done .big { font-size: 80px; }
+  .done h2 { font-size: 28px; margin: 10px 0; }
+  .done p { font-size: 21px; margin: 8px 0; }
+  .done .box { background: #fff; border-radius: 16px; padding: 16px; margin: 20px 0; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .hide { display: none !important; }
+  .loading { grid-column: 1 / -1; color: #888; font-size: 17px; padding: 6px 2px; }
+  #fatal { display: none; padding: 40px 22px; text-align: center; font-size: 21px; line-height: 1.6; }
+  body.typing .bar { display: none; }      /* 打字時把底部按鈕藏起來，才不會擋住輸入框 */
+  body.typing { padding-bottom: 40vh; }    /* 留空間讓輸入框可以捲到上面 */
+  .when { background: #FFF8E1; border-radius: 12px; padding: 12px 14px; font-size: 17px; color: #6D5200; margin-bottom: 12px; line-height: 1.5; }
+  /* 比較小的手機（例如 iPhone SE） */
+  @media (max-width: 360px) {
+    body { font-size: 18px; }
+    header h1 { font-size: 26px; }
+    .q { font-size: 20px; }
+    .pills label { font-size: 18px; padding: 13px 2px; }
+    .chip { font-size: 17px; padding: 9px 12px; }
+    textarea, input[type=date], input[type=time] { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="fatal"></div>
+<div id="formBox">
+  <header>
+    <h1>➕ 新增提醒</h1>
+    <p id="hello">照著 1、2、3 填好，按最下面的「完成」</p>
+  </header>
+  <main>
+
+  <div class="card">
+    <div class="q"><span class="num">1</span>要提醒什麼？</div>
+    <div class="chips" id="presets"></div>
+    <textarea id="content" placeholder="點上面的常用項目，或自己寫"></textarea>
+    <div class="hint">🎤 可以按鍵盤上的麥克風，用講的</div>
+  </div>
+
+  <div class="card">
+    <div class="q"><span class="num">2</span>事情是什麼時候？</div>
+    <div class="when">📌 填<b>事情本身</b>的日期和時間（例如回診的時間）。<br>想早一點收到通知，到第 3 步選「前一天」。</div>
+    <div class="pills" id="repeatBox">
+      <label><input type="radio" name="repeat" value="一次">只有一次</label>
+      <label><input type="radio" name="repeat" value="每天">每天</label>
+      <label><input type="radio" name="repeat" value="每週">每週</label>
+      <label><input type="radio" name="repeat" value="每月">每月</label>
+      <label><input type="radio" name="repeat" value="每年">每年</label>
+    </div>
+
+    <div class="sub hide" id="dateBox">
+      <div class="q">📅 日期</div>
+      <input type="date" id="date">
+      <div class="hint" id="dateHint"></div>
+    </div>
+
+    <div class="sub hide" id="wdBox">
+      <div class="q">📅 星期幾？<span class="opt">（可以選好幾天）</span></div>
+      <div class="pills wd">
+        <label><input type="checkbox" name="wd" value="1">一</label>
+        <label><input type="checkbox" name="wd" value="2">二</label>
+        <label><input type="checkbox" name="wd" value="3">三</label>
+        <label><input type="checkbox" name="wd" value="4">四</label>
+        <label><input type="checkbox" name="wd" value="5">五</label>
+        <label><input type="checkbox" name="wd" value="6">六</label>
+        <label><input type="checkbox" name="wd" value="7">日</label>
+      </div>
+    </div>
+
+    <div class="sub">
+      <div class="q">🕗 幾點？</div>
+      <div class="chips" id="timeChips"></div>
+      <input type="time" id="time" value="08:00">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="q"><span class="num">3</span>要不要先提醒？</div>
+    <div class="pills two" id="advBox">
+      <label class="on"><input type="radio" name="adv" value="" checked>不用</label>
+      <label><input type="radio" name="adv" value="1小時前">1 小時前</label>
+      <label><input type="radio" name="adv" value="2小時前">2 小時前</label>
+      <label><input type="radio" name="adv" value="前一天">前一天</label>
+    </div>
+    <div class="hint">選了之後，會「先提醒一次」，時間到了「再提醒一次」</div>
+  </div>
+
+  <div class="card">
+    <div class="q">👤 要 @ 誰？<span class="opt">（可以不選）</span></div>
+    <div class="pills two" id="whoBox"><span class="loading">名單載入中…</span></div>
+    <div class="hint">沒看到名字？請那個人<b>打開一次這個表單</b>（或在群組按一下機器人的按鈕），就會自動出現。</div>
+  </div>
+
+  </main>
+  <div class="bar">
+    <p class="err" id="err"></p>
+    <p class="summary" id="summary"></p>
+    <button class="go" id="go" onclick="submitForm()">完成</button>
+  </div>
+</div>
+
+<div class="done" id="doneBox">
+  <div class="big">✅</div>
+  <h2>新增好了！</h2>
+  <div class="box"><p id="doneDesc"></p><p id="doneContent" style="color:#555"></p></div>
+  <p id="countdown" style="color:#666"></p>
+  <button class="go" onclick="closePage()">✖ 關閉，回到 LINE</button>
+  <button class="go ghost" onclick="again()">➕ 再新增一則</button>
+</div>
+
+<script>
+  /******** 設定（不是密碼，可以公開） ********/
+  var LIFF_ID = '填入 LIFF ID';
+  var API_URL = '填入 Apps Script 網頁應用程式網址（/exec 結尾）';
+  /*********************************************/
+  var TODAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei' }).format(new Date()); // yyyy-mm-dd
+  var MEMBERS = [];
+  var ID_TOKEN = '';
+  var WD = ['', '一', '二', '三', '四', '五', '六', '日'];
+  function $(id) { return document.getElementById(id); }
+
+  // 常用項目：點一下就帶入內容和建議的時間設定
+  var PRESETS = [
+    { label: '💊 吃藥', text: '💊 吃藥時間到了喔！', repeat: '每天', time: '08:00' },
+    { label: '🩺 量血壓', text: '🩺 記得量血壓喔！', repeat: '每天', time: '07:30' },
+    { label: '🏥 回診', text: '🏥 要回診喔！記得帶健保卡、藥袋跟掛號單', repeat: '一次', time: '09:00', adv: '前一天' },
+    { label: '🩻 檢查', text: '🩻 要去醫院做檢查喔！記得看看要不要空腹', repeat: '一次', time: '08:00', adv: '前一天' },
+    { label: '🗑️ 倒垃圾', text: '🗑️ 今天要倒垃圾、資源回收喔！', repeat: '每週', time: '18:00' },
+    { label: '🎂 生日', text: '🎂 今天是＿＿＿的生日，記得說生日快樂！', repeat: '每年', time: '09:00' },
+    { label: '💰 繳費', text: '💰 記得繳水電費喔！', repeat: '每月', time: '10:00' },
+    { label: '📞 打電話', text: '📞 記得打電話給＿＿＿喔！', repeat: '一次', time: '19:00' }
+  ];
+  var TIMES = [['早上 8 點', '08:00'], ['中午 12 點', '12:00'], ['下午 3 點', '15:00'], ['晚上 8 點', '20:00']];
+
+  PRESETS.forEach(function (p) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = p.label;
+    b.onclick = function () {
+      $('content').value = p.text;
+      setRadio('repeat', p.repeat);
+      $('time').value = p.time;
+      setRadio('adv', p.adv || '');
+      refresh();
+      var blank = p.text.indexOf('＿');
+      if (blank >= 0) { $('content').focus(); $('content').setSelectionRange(blank, blank + 3); }
+    };
+    $('presets').appendChild(b);
+  });
+
+  TIMES.forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = t[0];
+    b.onclick = function () { $('time').value = t[1]; refresh(); };
+    $('timeChips').appendChild(b);
+  });
+
+  // @誰：所有人 + 群組成員（從 Apps Script 載入）
+  function renderMembers() {
+  $('whoBox').innerHTML = '';
+  [{ id: 'all', name: '📣 所有人' }].concat(MEMBERS).forEach(function (m) {
+    var lb = document.createElement('label');
+    lb.innerHTML = '<input type="checkbox" name="who">';
+    lb.querySelector('input').value = m.id;
+    lb.appendChild(document.createTextNode(m.id === 'all' ? m.name : '@' + m.name));
+    $('whoBox').appendChild(lb);
+  });
+  refresh();
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.name === 'who' && e.target.checked) {
+      // 選了「所有人」就取消個人；選了個人就取消「所有人」
+      document.querySelectorAll('input[name=who]').forEach(function (x) {
+        if ((e.target.value === 'all') !== (x.value === 'all')) x.checked = false;
+      });
+    }
+    refresh();
+  });
+  $('content').addEventListener('input', refresh);
+
+  function setRadio(name, v) {
+    document.querySelectorAll('input[name=' + name + ']').forEach(function (x) { x.checked = (x.value === v); });
+  }
+  function val(name) {
+    var c = document.querySelector('input[name=' + name + ']:checked');
+    return c ? c.value : '';
+  }
+  function vals(name) {
+    return Array.prototype.map.call(document.querySelectorAll('input[name=' + name + ']:checked'), function (x) { return x.value; });
+  }
+  function md(ymd) {
+    if (!ymd) return '';
+    var d = new Date(ymd + 'T12:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate() + '（' + '日一二三四五六'[d.getDay()] + '）';
+  }
+
+  function refresh() {
+    document.querySelectorAll('.pills label').forEach(function (x) {
+      x.classList.toggle('on', x.querySelector('input').checked);
+    });
+    var r = val('repeat');
+    $('dateBox').classList.toggle('hide', !(r === '一次' || r === '每月' || r === '每年'));
+    $('wdBox').classList.toggle('hide', r !== '每週');
+    $('dateHint').textContent = r === '每月' ? '會在每個月的這一天提醒' : r === '每年' ? '會在每年的這一天提醒（例如生日）' : '';
+    if (r === '一次') $('date').min = TODAY; else $('date').removeAttribute('min');
+
+    // 底部顯示「會在什麼時候提醒」
+    var t = $('time').value, s = '';
+    if (r === '每天') s = '每天 ' + t;
+    else if (r === '每週') s = vals('wd').length ? '每週' + vals('wd').map(function (d) { return WD[d]; }).join('、') + ' ' + t : '';
+    else if (r === '每月') s = $('date').value ? '每月 ' + Number($('date').value.slice(8)) + ' 號 ' + t : '';
+    else if (r === '每年') s = $('date').value ? '每年 ' + Number($('date').value.slice(5, 7)) + '/' + Number($('date').value.slice(8)) + ' ' + t : '';
+    else if (r === '一次') s = md($('date').value) + ' ' + t;
+    var adv = val('adv');
+    if (s && adv) s += '，' + (adv === '前一天' ? '前一天' : adv) + '會先提醒一次';
+    $('summary').textContent = s ? '🔔 ' + s : '';
+  }
+
+  var closeTimer;
+  function closePage() {
+    clearInterval(closeTimer);
+    if (window.liff && liff.isInClient && liff.isInClient()) liff.closeWindow();
+    else window.close();
+  }
+  function again() { clearInterval(closeTimer); location.reload(); }
+
+  function api(action, data) {
+    // 用 text/plain 送出，Apps Script 才收得到（不會被瀏覽器擋）
+    return fetch(API_URL, { method: 'POST', body: JSON.stringify({ api: action, idToken: ID_TOKEN, data: data || {} }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || '發生錯誤'); return j; });
+  }
+
+  function showErr(msg) { $('err').textContent = '⚠️ ' + msg; $('err').style.display = 'block'; }
+
+  function submitForm() {
+    $('err').style.display = 'none';
+    var data = {
+      content: $('content').value, repeat: val('repeat'), date: $('date').value,
+      time: $('time').value, weekdays: vals('wd'), advance: val('adv'), who: vals('who')
+    };
+    if (!data.content.trim()) { $('content').focus(); return showErr('請寫要提醒什麼'); }
+    if (!data.repeat) return showErr('請選「什麼時候」');
+    if (data.repeat === '每週' && !data.weekdays.length) return showErr('請選星期幾');
+    $('go').disabled = true; $('go').textContent = '送出中…';
+    api('add', data)
+      .then(function (j) {
+        $('formBox').style.display = 'none';
+        $('doneDesc').textContent = '🔔 ' + j.desc;
+        $('doneContent').textContent = data.content;
+        $('doneBox').style.display = 'block';
+        window.scrollTo(0, 0);
+        // 3 秒後自動關閉，回到 LINE
+        var n = 3;
+        $('countdown').textContent = n + ' 秒後自動回到 LINE…';
+        closeTimer = setInterval(function () {
+          n--;
+          if (n <= 0) return closePage();
+          $('countdown').textContent = n + ' 秒後自動回到 LINE…';
+        }, 1000);
+      })
+      .catch(function (e) {
+        $('go').disabled = false; $('go').textContent = '完成';
+        showErr(String(e.message || e));
+      });
+  }
+
+  function fatal(msg) { $('formBox').style.display = 'none'; $('fatal').innerHTML = msg; $('fatal').style.display = 'block'; }
+
+  $('date').value = TODAY;
+  refresh();
+
+  // 啟動 LIFF：知道是誰打開的，順便載入成員名單
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+    ID_TOKEN = liff.getIDToken();
+    return api('hello').then(function (j) {
+      MEMBERS = j.members || [];
+      if (j.me && j.me.name) $('hello').textContent = '👋 ' + j.me.name + '，照著 1、2、3 填好，按最下面的「完成」';
+      renderMembers();
+    });
+  }).catch(function (e) {
+    var m = String(e.message || e);
+    if (/群組/.test(m)) fatal('🙇 ' + m);
+    else { $('whoBox').innerHTML = '<span class="loading">名單載入失敗，可以先不選</span>'; console.error(e); }
+  });
+</script>
+</body>
+</html>
