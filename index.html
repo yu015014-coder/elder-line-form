@@ -58,6 +58,7 @@
   .done p { font-size: 21px; margin: 8px 0; }
   .done .box { background: #fff; border-radius: 16px; padding: 16px; margin: 20px 0; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
   .hide { display: none !important; }
+  .pills label.wide { grid-column: 1 / -1; }
   .loading { grid-column: 1 / -1; color: #888; font-size: 17px; padding: 6px 2px; }
   #fatal { display: none; padding: 40px 22px; text-align: center; font-size: 21px; line-height: 1.6; }
   body.typing .bar { display: none; }      /* 打字時把底部按鈕藏起來，才不會擋住輸入框 */
@@ -134,6 +135,15 @@
       <label><input type="radio" name="adv" value="1小時前">1 小時前</label>
       <label><input type="radio" name="adv" value="2小時前">2 小時前</label>
       <label><input type="radio" name="adv" value="前一天">前一天</label>
+      <label class="wide"><input type="radio" name="adv" value="custom">⏰ 自己選先提醒的時間</label>
+    </div>
+    <div class="sub hide" id="customBox">
+      <div class="pills two">
+        <label class="on"><input type="radio" name="advDay" value="前一天" checked>前一天</label>
+        <label><input type="radio" name="advDay" value="當天">當天</label>
+      </div>
+      <div class="chips" id="advChips" style="margin-top:12px"></div>
+      <input type="time" id="advTime" value="20:00">
     </div>
     <div class="hint">選了之後，會「先提醒一次」，時間到了「再提醒一次」</div>
   </div>
@@ -200,6 +210,19 @@
     $('presets').appendChild(b);
   });
 
+  [['早上 7 點', '07:00'], ['早上 8 點', '08:00'], ['晚上 8 點', '20:00'], ['晚上 9 點', '21:00']].forEach(function (t) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = t[0];
+    b.onclick = function () { $('advTime').value = t[1]; refresh(); };
+    $('advChips').appendChild(b);
+  });
+
+  // 實際送出去的「提前」值：自訂就變成「前一天 20:00」這種格式
+  function advValue() {
+    var a = val('adv');
+    return a === 'custom' ? val('advDay') + ' ' + $('advTime').value : a;
+  }
+
   TIMES.forEach(function (t) {
     var b = document.createElement('button');
     b.type = 'button'; b.className = 'chip'; b.textContent = t[0];
@@ -264,8 +287,9 @@
     else if (r === '每月') s = $('date').value ? '每月 ' + Number($('date').value.slice(8)) + ' 號 ' + t : '';
     else if (r === '每年') s = $('date').value ? '每年 ' + Number($('date').value.slice(5, 7)) + '/' + Number($('date').value.slice(8)) + ' ' + t : '';
     else if (r === '一次') s = md($('date').value) + ' ' + t;
-    var adv = val('adv');
-    if (s && adv) s += '，' + (adv === '前一天' ? '前一天' : adv) + '會先提醒一次';
+    $('customBox').classList.toggle('hide', val('adv') !== 'custom');
+    var adv = advValue();
+    if (s && adv) s += '，' + adv + '會先提醒一次';
     $('summary').textContent = s ? '🔔 ' + s : '';
   }
 
@@ -290,11 +314,12 @@
     $('err').style.display = 'none';
     var data = {
       content: $('content').value, repeat: val('repeat'), date: $('date').value,
-      time: $('time').value, weekdays: vals('wd'), advance: val('adv'), who: vals('who')
+      time: $('time').value, weekdays: vals('wd'), advance: advValue(), who: vals('who')
     };
     if (!data.content.trim()) { $('content').focus(); return showErr('請寫要提醒什麼'); }
     if (!data.repeat) return showErr('請選「什麼時候」');
     if (data.repeat === '每週' && !data.weekdays.length) return showErr('請選星期幾');
+    if (/^當天 /.test(data.advance) && data.advance.slice(3) >= data.time) return showErr('「當天先提醒」的時間要比事情的時間早喔');
     $('go').disabled = true; $('go').textContent = '送出中…';
     api('add', data)
       .then(function (j) {
